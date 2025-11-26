@@ -10,7 +10,7 @@ services:
     restart: "always"
     # Mapeia a porta 3000 interna do Next.js para a porta 8080 da VM
     ports:
-      - "8080:3000"
+      - "8081:3000"
 
     # IMPORTANTE: A seção de volumes foi removida para este serviço.
     # Isso garante que o link simbólico criado manualmente (src/app/data/cache -> /mnt/cache_remoto)

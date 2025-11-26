@@ -8,13 +8,23 @@ COPY . .
 # 🚨 CORREÇÃO: Aplicar a variável NEXT_FONT_GOOGLE_OPTIMIZED=false aqui, na etapa de build.
 RUN npm run build
 # RUN NEXT_FONT_GOOGLE_OPTIMIZED=false npm run build
-
 # Etapa 2: Executar a aplicação em um ambiente leve
-# Use node:20-alpine para uma imagem final mais leve.
 FROM node:20-alpine
 WORKDIR /app
 
-# ... (restante da cópia de arquivos)
+# Copia apenas o necessário para produção:
+# O Next.js precisa da pasta .next e dos node_modules
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/node_modules ./node_modules
+
+# 🚨 CORREÇÃO CRÍTICA: Copia o package.json para que o 'npm start' funcione
+COPY --from=builder /app/package.json ./package.json
+
+# Copia o código fonte (para que o link simbólico possa ser lido)
+COPY --from=builder /app/src ./src
+
+# Copia arquivos estáticos
+COPY --from=builder /app/public ./public
 
 # O Next.js usa a porta 3000 por padrão.
 EXPOSE 3000
