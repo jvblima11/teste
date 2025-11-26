@@ -1,0 +1,23 @@
+# Etapa 1: Instalar dependências e construir a aplicação
+FROM node:20 AS builder
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm install
+COPY . .
+
+# 🚨 CORREÇÃO: Aplicar a variável NEXT_FONT_GOOGLE_OPTIMIZED=false aqui, na etapa de build.
+RUN npm run build
+# RUN NEXT_FONT_GOOGLE_OPTIMIZED=false npm run build
+
+# Etapa 2: Executar a aplicação em um ambiente leve
+# Use node:20-alpine para uma imagem final mais leve.
+FROM node:20-alpine
+WORKDIR /app
+
+# ... (restante da cópia de arquivos)
+
+# O Next.js usa a porta 3000 por padrão.
+EXPOSE 3000
+
+# Comando para iniciar o servidor Next.js em produção
+CMD ["npm", "start"]

@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  # Serviço para o seu site Next.js
+  next-app:
+    # Usa o Dockerfile.next para construir a imagem
+    build:
+      context: .
+      dockerfile: Dockerfile.next
+    restart: "always"
+    # Mapeia a porta 3000 interna do Next.js para a porta 8080 da VM
+    ports:
+      - "8080:3000"
+
+    # IMPORTANTE: A seção de volumes foi removida para este serviço.
+    # Isso garante que o link simbólico criado manualmente (src/app/data/cache -> /mnt/cache_remoto)
+    # não seja sobrescrito pelo Docker e a aplicação possa ler o cache do Host.
