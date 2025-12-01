@@ -12,6 +12,14 @@ services:
     ports:
       - "8081:3000"
 
-    # IMPORTANTE: A seção de volumes foi removida para este serviço.
-    # Isso garante que o link simbólico criado manualmente (src/app/data/cache -> /mnt/cache_remoto)
-    # não seja sobrescrito pelo Docker e a aplicação possa ler o cache do Host.
+    volumes:
+      # 1. Mapeamento do Cache Remoto (Samba/Primário)
+      # Mapeia o caminho completo do host para o caminho completo do container.
+      # O código no Canvas espera este caminho: /mnt/cache_remoto
+      - /mnt/cache_remoto:/mnt/cache_remoto
+
+      # 2. Mapeamento do Cache Local (Backup)
+      # Mapeia a pasta 'data' do seu projeto no host para o caminho interno: /teste/data
+      # O seu arquivo de backup deve estar em: [pasta do projeto no host]/data/tabela_processos.json
+      # O caminho './data' usa o diretório onde o docker-compose.yml está como base.
+      - ./data:/teste/data
