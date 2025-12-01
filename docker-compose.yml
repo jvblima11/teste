@@ -1,25 +1,12 @@
-version: "3.8"
-
 services:
   # Serviço para o seu site Next.js
-  next-app:
-    # Usa o Dockerfile.next para construir a imagem
+  web:
     build:
       context: .
       dockerfile: Dockerfile.next
     restart: "always"
-    # Mapeia a porta 3000 interna do Next.js para a porta 8080 da VM
     ports:
-      - "8081:3000"
-
+      - "0.0.0.0:8080:3000"
     volumes:
-      # 1. Mapeamento do Cache Remoto (Samba/Primário)
-      # Mapeia o caminho completo do host para o caminho completo do container.
-      # O código no Canvas espera este caminho: /mnt/cache_remoto
-      - /mnt/cache_remoto:/mnt/cache_remoto
-
-      # 2. Mapeamento do Cache Local (Backup)
-      # Mapeia a pasta 'data' do seu projeto no host para o caminho interno: /teste/data
-      # O seu arquivo de backup deve estar em: [pasta do projeto no host]/data/tabela_processos.json
-      # O caminho './data' usa o diretório onde o docker-compose.yml está como base.
-      - ./data:/teste/data
+      # NOVO VOLUME: VM /teste/app/data para Container /app/data
+      - /teste/app/data:/app/data
