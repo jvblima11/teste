@@ -4,15 +4,24 @@ WORKDIR /teste
 COPY package.json package-lock.json ./
 RUN npm install
 COPY . .
-RUN npm run build
 
----
-# Etapa 2: Executar a aplicação em um ambiente leve (Runtime)
+# 🚨 CORREÇÃO: Aplicar a variável NEXT_FONT_GOOGLE_OPTIMIZED=false aqui, na etapa de build.
+RUN npm run build
+# RUN NEXT_FONT_GOOGLE_OPTIMIZED=false npm run build
+# Etapa 2: Executar a aplicação em um ambiente leve
 FROM node:20-alpine
 WORKDIR /teste
 
-# 💡 Ação Correta: Copiar TUDO da pasta /teste do builder para o /teste do runtime.
-# Isso inclui: .next, node_modules, package.json, src/ e todos os outros arquivos necessários.
+# Copia apenas o necessário para produção:
+# O Next.js precisa da pasta .next e dos node_modules
+COPY --from=builder /teste/.next ./.next
+COPY --from=builder /teste/node_modules ./node_modules
+
+# 🚨 CORREÇÃO CRÍTICA: Copia o package.json para que o 'npm start' funcione
+COPY --from=builder /teste/package.json ./package.json
+
+# 🚨 NOVO: Copia todo o código fonte e arquivos de configuração restantes do BUILDER
+# O * significa "tudo que estiver na raiz de /teste", garantindo que /teste/src seja incluído.
 COPY --from=builder /teste/. .
 
 # O Next.js usa a porta 3000 por padrão.
