@@ -1,12 +1,21 @@
+version: "3.8"
+
 services:
-  # Serviço para o seu site Next.js
   web:
+    # Usa o Dockerfile.next na pasta atual para construir a imagem
     build:
       context: .
       dockerfile: Dockerfile.next
+
+    container_name: nextjs-web-server
     restart: "always"
+
+    # Mapeia a porta 3000 do container para a porta 8080 da sua VM
     ports:
       - "0.0.0.0:8080:3000"
+
+    # 🔑 O MAIS IMPORTANTE: Mapeamento de Volume
+    # Lado Esquerdo (VM): Onde o arquivo JSON realmente existe na sua VM.
+    # Lado Direito (Container): O caminho EXATO que o código Next.js espera.
     volumes:
-      # NOVO VOLUME: VM /teste/app/data para Container /app/data
-      - /teste/app/data:/app/data
+      - /teste/app/data:/teste/data

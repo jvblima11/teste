@@ -5,7 +5,7 @@ import * as path from "path";
 // 🚨 CAMINHOS DE ACESSO AO CACHE (REMOTO e LOCAL)
 
 // 1. Primário: Caminho para a pasta compartilhada com o Samba
-const CACHE_FILE_PATH_REMOTE = "/mnt/cache_remoto/processos_cache.json";
+const CACHE_FILE_PATH_REMOTE = "/mnt/cache_remoto/tabela_processos.json";
 
 // 2. Backup: Caminho local (dentro do contêiner Docker)
 const CACHE_FILE_PATH = "/teste/data/tabela_processos.json";
