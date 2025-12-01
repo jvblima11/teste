@@ -5,9 +5,12 @@ import * as path from "path";
 // 🚨 CAMINHOS DE ACESSO AO CACHE (REMOTO e LOCAL)
 
 // 1. Primário: Caminho para a pasta compartilhada com o Samba
+// -> Este caminho é a causa da primeira falha (ENOENT)
 const CACHE_FILE_PATH_REMOTE = "/mnt/cache_remoto/tabela_processos.json";
 
 // 2. Backup: Caminho local (dentro do contêiner Docker)
+// -> O seu código Next.js está programado para procurar aqui.
+// -> O volume Docker deve mapear para este diretório: /teste/data
 const CACHE_FILE_PATH = "/teste/data/tabela_processos.json";
 
 /**
