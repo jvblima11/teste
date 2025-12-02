@@ -4,18 +4,19 @@ import * as path from "path";
 
 // 🚨 CAMINHOS DE ACESSO AO CACHE (REMOTO e LOCAL)
 
-// 1. Primário: Caminho para a pasta compartilhada com o Samba
-// -> Este caminho é a causa da primeira falha (ENOENT)
+// 1. Primário: Caminho para a pasta compartilhada com o Samba (Mantido, mas provavelmente inacessível no seu dev local)
 const CACHE_FILE_PATH_REMOTE = "/mnt/cache_remoto/tabela_processos.json";
 
-// 2. Backup: Caminho local (dentro do contêiner Docker)
-// -> O seu código Next.js está programado para procurar aqui.
-// -> O volume Docker deve mapear para este diretório: /teste/data
-const CACHE_FILE_PATH = "/teste/data/tabela_processos.json";
+// 2. Backup: Caminho local (ADAPTADO para rodar com 'npm run dev' no seu projeto)
+// Usa process.cwd() para apontar para a raiz do seu projeto Next.js, seguido por public/data
+const CACHE_FILE_PATH = path.join(
+  process.cwd(),
+  "data",
+  "tabela_processos.json"
+);
 
 /**
- * Tenta ler o arquivo JSON em um dos caminhos, começando pelo remoto.
- * Se o caminho primário falhar, tenta o caminho de backup.
+ * Tenta ler o arquivo JSON em um determinado caminho.
  * @param filePath O caminho do arquivo a ser lido.
  * @returns O conteúdo do arquivo como string.
  */
@@ -25,59 +26,85 @@ async function readFileSafe(filePath: string): Promise<string> {
     console.log(`✅ Arquivo de cache lido com sucesso em: ${filePath}`);
     return data;
   } catch (error) {
-    // Se falhar (e o erro não for uma sintaxe de JSON corrompida), lançamos
-    // o erro para o bloco catch de getProcessCache tentar o próximo caminho.
     throw error;
   }
 }
 
 /**
+ * Salva o conteúdo lido do cache remoto no cache local.
+ * Esta função agora TENTA CRIAR O DIRETÓRIO se ele não existir, para resolver o ENOENT.
+ * @param content O conteúdo do arquivo lido.
+ */
+async function updateLocalCache(content: string): Promise<void> {
+  const dirPath = path.dirname(CACHE_FILE_PATH);
+  console.log(`⚠️ Tentando atualizar o cache local: ${CACHE_FILE_PATH}`);
+  try {
+    // Garante que o diretório exista antes de tentar escrever o arquivo
+    await fs.mkdir(dirPath, { recursive: true });
+    await fs.writeFile(CACHE_FILE_PATH, content, "utf-8");
+    console.log(`✅ Cache local atualizado com sucesso em: ${CACHE_FILE_PATH}`);
+  } catch (error) {
+    console.error(
+      `❌ AVISO: Falha ao atualizar o cache local. Erro: ${
+        (error as Error).message
+      }`
+    );
+  }
+}
+
+/**
  * Tenta ler o cache JSON, priorizando o caminho remoto e usando o local como backup.
- * Agora espera-se que o cache seja um ARRAY de objetos, e a busca será feita
- * por iteração (Busca Linear).
+ * SE A LEITURA REMOTA FOR BEM-SUCEDIDA, ELE ATUALIZA O CACHE LOCAL.
  */
 async function getProcessCache(): Promise<any[]> {
-  // Alterado para retornar um Array
   let fileContent: string;
   let attemptPath: string;
+  let isRemoteSuccess = false;
+  let lastAttemptedPath = ""; // Para logs de erro
 
   // 1. TENTATIVA REMOTA (Samba)
   attemptPath = CACHE_FILE_PATH_REMOTE;
+  lastAttemptedPath = attemptPath;
   console.log(`⚠️ Tentando ler o cache primário (Samba): ${attemptPath}`);
 
   try {
     fileContent = await readFileSafe(attemptPath);
+    isRemoteSuccess = true;
   } catch (remoteError) {
-    // A leitura remota falhou (pode ser problema de rede, permissão ou arquivo inexistente)
     console.warn(
       `❌ Falha na leitura remota. Tentando o cache local. Erro: ${
         (remoteError as Error).message
       }`
     );
 
-    // 2. TENTATIVA LOCAL (Docker)
+    // 2. TENTATIVA LOCAL (Dev Local)
     attemptPath = CACHE_FILE_PATH;
-    console.log(`⚠️ Tentando ler o cache de backup (Local): ${attemptPath}`);
+    lastAttemptedPath = attemptPath;
+    console.log(
+      `⚠️ Tentando ler o cache de backup (Local/Dev): ${attemptPath}`
+    );
 
     try {
       fileContent = await readFileSafe(attemptPath);
     } catch (localError) {
-      // Se a leitura local também falhar, lançamos o erro final.
       console.error(
         `❌ Falha total: O cache local também falhou. Erro: ${
           (localError as Error).message
         }`
       );
-      // Lança o erro de volta para o bloco catch principal.
       throw localError;
     }
+  }
+
+  // 🚨 ATUALIZAÇÃO: Se o remoto foi lido com sucesso, atualiza o local (que agora é public/data)
+  if (isRemoteSuccess) {
+    await updateLocalCache(fileContent);
   }
 
   // Se chegarmos aqui, fileContent contém dados lidos com sucesso de algum dos caminhos.
   try {
     const parsedData = JSON.parse(fileContent);
 
-    // VALIDAÇÃO CRUCIAL: Agora verificamos se o conteúdo JSON é um ARRAY
     if (!Array.isArray(parsedData)) {
       throw new Error(
         "Conteúdo do arquivo JSON inválido. A API espera uma lista (Array) de objetos."
@@ -86,17 +113,15 @@ async function getProcessCache(): Promise<any[]> {
 
     return parsedData;
   } catch (error) {
-    // Captura erros de parsing ou validação de Array
     let errorMessage: string;
-    let statusCode: number = 503; // Service Unavailable padrão
+    let statusCode: number = 503;
 
     if (error instanceof Error && error.name === "SyntaxError") {
-      // Erro de JSON inválido.
       errorMessage =
         "Erro de parse: O conteúdo do arquivo JSON está corrompido ou mal formatado.";
-      statusCode = 500; // Internal Server Error
+      statusCode = 500;
     } else {
-      errorMessage = `Falha no processamento do cache em ${attemptPath}: ${
+      errorMessage = `Falha no processamento do cache em ${lastAttemptedPath}: ${
         error instanceof Error ? error.message : "Erro desconhecido."
       }`;
     }
@@ -116,23 +141,18 @@ export async function GET(request: Request) {
   if (!processo) {
     return NextResponse.json(
       { message: "Número do processo é obrigatório." },
-      { status: 400 } // Bad Request
+      { status: 400 }
     );
   }
 
-  // Decodifica a URL e remove espaços extras.
   processo = decodeURIComponent(processo || "").trim();
 
   try {
-    // 1. Tenta carregar TODO o cache (agora um Array, com lógica de failover)
     const cacheArray = await getProcessCache();
 
-    // 2. Procura o processo ITERANDO sobre o Array (Busca Linear)
-    // O backend espera encontrar o campo 'processo' dentro de cada objeto.
     const processData = cacheArray.find((item) => item.processo === processo);
 
     if (!processData) {
-      // Retorno 404 - Processo não encontrado no cache
       return NextResponse.json(
         {
           message: "Processo não encontrado ou ainda não analisado.",
@@ -142,10 +162,9 @@ export async function GET(request: Request) {
       );
     }
 
-    // Retorno 200 - Sucesso
+    // ⭐️ RETORNA APENAS O LOCAL, CONFORME SEU CÓDIGO ATUAL
     return NextResponse.json(processData, { status: 200 });
   } catch (error) {
-    // Captura o erro e tenta obter o statusCode customizado que foi anexado
     const statusCode =
       error instanceof Error && "statusCode" in error
         ? (error as any).statusCode
@@ -154,7 +173,6 @@ export async function GET(request: Request) {
     const errorMessage =
       error instanceof Error ? error.message : "Erro interno desconhecido.";
 
-    // Retorno de erro
     return NextResponse.json({ message: errorMessage }, { status: statusCode });
   }
 }

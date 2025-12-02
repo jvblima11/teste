@@ -5,13 +5,20 @@ import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+// Defina a interface para o formato de dados esperado da API
+interface ProcessData {
+  processo: string;
+  dias: number;
+  tipo_tabela: string;
+  unidade: string;
+  posição: number; // Chave com cedilha
+  local?: string;
+}
+
 const BuscaPage = () => {
-  // Unifica o estado do input em uma única variável
   const [termoBusca, setTermoBusca] = useState("");
-  // Estado para armazenar o resultado da busca (HTML ou mensagem)
   const [resultado, setResultado] = useState<React.ReactNode | null>(null);
-  // Estado para os dados mock
-  const [dados, setDados] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   // Função que lida com a formatação e atualização do estado do input
   const handleProcessChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -25,112 +32,23 @@ const BuscaPage = () => {
     if (value.length > 10) formattedValue += "/" + value.substring(10, 14);
     if (value.length > 14) formattedValue += "-" + value.substring(14, 16);
 
-    // Atualiza o estado
+    // Limita o tamanho total
+    if (formattedValue.length > 19)
+      formattedValue = formattedValue.substring(0, 19);
+
     setTermoBusca(formattedValue);
   };
 
   const router = useRouter();
 
-  const handleGoBack = () => {
-    router.back();
-  };
-
-  // Função para buscar o processo
-  // const buscarProcesso = async (e: React.FormEvent<HTMLFormElement>) => {
-  //   // Evita o refresh da página
-  //   e.preventDefault();
-
-  //   // Pega o valor do estado do input
-  //   const termo = termoBusca.trim();
-  //   const regex = /^\d{4}\.\d{6}\/\d{4}-\d{2}$/;
-
-  //   // Verifica se o formato é válido
-  //   if (!regex.test(termo)) {
-  //     setResultado(
-  //       <p className="mensagem text-red-500">
-  //         Digite o processo no formato correto: xxxx.xxxxxx/xxxx-xx
-  //       </p>
-  //     );
-  //     return;
-  //   }
-
-  //   // Filtra os dados com base no termo de busca
-  //   setDados(true);
-
-  //   try {
-  //     // Se o processo foi encontrado, renderiza a tabela
-  //     const processoEncontrado = await getProcessByNumber(termo);
-  //     if (processoEncontrado) {
-  //       setResultado(
-  //         <div className="relative overflow-x-auto shadow-md sm:rounded-lg w-full md:w-4/6 mx-auto">
-  //           <table className="w-full text-sm text-left rtl:text-right text-gray-500">
-  //             <thead className="text-xs bg-gray-300 text-gray-700 uppercase">
-  //               <tr>
-  //                 <th scope="col" className="px-6 py-3">
-  //                   Posição na Fila
-  //                 </th>
-  //                 <th scope="col" className="px-6 py-3">
-  //                   Processo
-  //                 </th>
-  //                 <th scope="col" className="px-6 py-3">
-  //                   Dias
-  //                 </th>
-  //                 <th scope="col" className="px-6 py-3">
-  //                   Marcador no SEI
-  //                 </th>
-  //                 <th scope="col" className="px-6 py-3">
-  //                   Unidade COMRAR
-  //                 </th>
-  //               </tr>
-  //             </thead>
-  //             <tbody>
-  //               <tr className="bg-white border-b border-gray-200">
-  //                 <td className="px-6 py-4">{processoEncontrado.posição}</td>
-  //                 <td className="px-6 py-4">{processoEncontrado.processo}</td>
-  //                 <td className="px-6 py-4">{processoEncontrado.dias}</td>
-  //                 <td className="px-6 py-4">
-  //                   {processoEncontrado.tipo_tabela}
-  //                 </td>
-  //                 <td className="px-6 py-4">{processoEncontrado.unidade}</td>
-  //               </tr>
-  //             </tbody>
-  //           </table>
-  //         </div>
-  //       );
-  //     } else {
-  //       // Se não foi encontrado, renderiza a mensagem de erro
-  //       setResultado(
-  //         <div className="justify-content-center align-items-center text-center">
-  //           <p className="mensagem text-red-500">
-  //             Processo n&atilde;o encontrado, ou n&atilde;o inserido na fila de
-  //             an&aacute;lise
-  //           </p>
-  //           <p className="mensagem text-red-500">
-  //             Entre em contato pelo n&uacute;mero: <b>3212-9665</b>
-  //           </p>
-  //         </div>
-  //       );
-  //     }
-  //   } catch (error) {
-  //     // Em caso de erro na chamada da Server Action
-  //     console.error("Erro ao buscar o processo:", error);
-  //     setResultado(
-  //       <p className="mensagem text-red-500">
-  //         Ocorreu um erro ao buscar o processo. Por favor, tente novamente.
-  //       </p>
-  //     );
-  //   } finally {
-  //     // Finaliza o estado de carregamento
-  //     setDados(false);
-  //   }
-  // };
-
   const buscaProcesso = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     const processo = termoBusca.trim();
+    // Regex ajustada para checar apenas o formato final (com 19 caracteres)
     const regex = /^\d{4}\.\d{6}\/\d{4}-\d{2}$/;
 
+    // 1. VALIDAÇÃO DO FORMATO
     if (!regex.test(processo)) {
       setResultado(
         <p className="mensagem text-red-500">
@@ -140,58 +58,64 @@ const BuscaPage = () => {
       return;
     }
 
-    setDados(true);
+    setLoading(true); // Inicia o estado de carregamento
 
+    // Monta a URL da API, codificando o número do processo
     const apiUrl = `/api/processo?numero=${encodeURIComponent(processo)}`;
-    // const apiUrl = `/api/getProcess?numero=${encodeURIComponent(termo)}`;
 
     try {
       const response = await fetch(apiUrl);
 
       if (response.ok) {
-        const processoEncontrado = await response.json();
-        setResultado(
-          <div className="relative overflow-x-auto shadow-md sm:rounded-lg w-full md:w-4/6 mx-auto">
-            <table className="w-full text-sm text-left rtl:text-right text-gray-500">
-              <thead className="text-xs bg-gray-300 text-gray-700 uppercase">
-                <tr>
-                  <th scope="col" className="px-6 py-3">
-                    Posição na Fila
-                  </th>
-                  <th scope="col" className="px-6 py-3">
-                    Processo
-                  </th>
-                  <th scope="col" className="px-6 py-3">
-                    Dias
-                  </th>
-                  <th scope="col" className="px-6 py-3">
-                    Marcador no SEI
-                  </th>
-                  <th scope="col" className="px-6 py-3">
-                    Unidade COMRAR
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="bg-white border-b border-gray-200">
-                  {/* Certifique-se que as chaves do JSON de resposta são iguais */}
-                  <td className="px-6 py-4">{processoEncontrado.posição}</td>
-                  <td className="px-6 py-4">{processoEncontrado.processo}</td>
-                  <td className="px-6 py-4">{processoEncontrado.dias}</td>
-                  <td className="px-6 py-4">
-                    {processoEncontrado.tipo_tabela}
-                  </td>
-                  <td className="px-6 py-4">{processoEncontrado.unidade}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        );
+        const processoEncontrado: ProcessData = await response.json();
+
+        console.log("Dados recebidos da API:", processoEncontrado);
+
+        // 2. RENDERIZAÇÃO DA TABELA COMPLETA
+        // Refinamento: Adiciona uma validação final para garantir que o objeto não é nulo/vazio.
+        if (processoEncontrado) {
+          setResultado(
+            <div className="relative overflow-x-auto shadow-md sm:rounded-lg w-full md:w-4/6 mx-auto">
+              <table className="w-full text-sm text-left rtl:text-right text-gray-500">
+                <thead className="text-xs bg-gray-300 text-gray-700 uppercase">
+                  <tr>
+                    <th scope="col" className="px-6 py-3">
+                      Posição na Fila
+                    </th>
+                    <th scope="col" className="px-6 py-3">
+                      Processo
+                    </th>
+                    <th scope="col" className="px-6 py-3">
+                      Dias
+                    </th>
+                    <th scope="col" className="px-6 py-3">
+                      Marcador no SEI
+                    </th>
+                    <th scope="col" className="px-6 py-3">
+                      Unidade COMRAR
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="bg-white border-b border-gray-200">
+                    {/* Mapeamento das chaves do JSON para a tabela */}
+                    <td className="px-6 py-4">{processoEncontrado.posição}</td>
+                    <td className="px-6 py-4">{processoEncontrado.processo}</td>
+                    <td className="px-6 py-4">{processoEncontrado.dias}</td>
+                    <td className="px-6 py-4">
+                      {processoEncontrado.tipo_tabela}
+                    </td>
+                    <td className="px-6 py-4">{processoEncontrado.unidade}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          );
+        }
       } else {
         // 3. TRATAMENTO DE ERROS (Status 4xx, 5xx)
         const errorData = await response.json();
 
-        // Verifica se o erro é 404 para exibir a mensagem específica
         const isNotFound = response.status === 404;
         const errorMessage = isNotFound
           ? "Processo não encontrado, ou não inserido na fila de análise"
@@ -216,7 +140,7 @@ const BuscaPage = () => {
         </p>
       );
     } finally {
-      setDados(false);
+      setLoading(false); // Finaliza o estado de carregamento
     }
   };
 
@@ -259,15 +183,10 @@ const BuscaPage = () => {
             <button
               type="submit"
               className="bg-green-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-green-700 cursor-pointer"
+              disabled={loading}
             >
-              ✅ Confirmar
+              {loading ? "Buscando..." : "✅ Confirmar"}
             </button>
-            {/* <button
-              onClick={handleGoBack}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-slate-500 rounded-md hover:bg-slate-600 transition-colors cursor-pointer"
-            >
-              <ArrowLeft size={16} /> Voltar
-            </button> */}
           </div>
         </form>
 
